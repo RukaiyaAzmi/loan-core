@@ -1,0 +1,19 @@
+{
+  "port": 8080,
+  "master": {
+    "user": "postgres",
+    "host": "localhost",
+    "database": "loandb",
+    "password": "1234",
+    "port": 5432
+  },
+  "slaves": [
+    {
+      "user": "postgres",
+      "host": "localhost",
+      "database": "loandb",
+      "password": "1234",
+      "port": 5432
+    }
+  ]
+}
