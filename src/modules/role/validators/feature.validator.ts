@@ -21,6 +21,9 @@ export const validateFeature = [
     .withMessage("field is required")
     .notEmpty()
     .withMessage("field cannot be null"),
+  body("iconId")
+    .isLength({ max: 10 })
+    .withMessage("Icon Id must be less than 11 digit"),
   body("type")
     .exists()
     .withMessage("field is required")
