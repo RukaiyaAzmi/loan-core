@@ -1,16 +1,19 @@
-export interface FeatureAttrs {
-  id?: number;
-  featureName: string;
-  featureNameBan: string;
-  featureCode: string;
-  url: string;
-  type: string;
-  position: string;
-  iconId?: string;
-  parentId?: string;
-  isActive: string;
-  createdBy?: string;
-  createDate: Date;
-  updatedBy?: string;
-  updateDate?: Date;
+
+
+export interface IFeatureAttrs {
+    id?: number,
+    featureName?: string,
+    featureNameBan?: string,
+    featureCode?: string,
+    url?: string,
+    type?: string,
+    isRoot?: boolean,
+    iconId?: string,
+    parentId?: null | number,
+    isActive?: boolean,
+    position?: string,
+    createdBy?: string,
+    createDate?: Date,
+    updatedBy?: string,
+    updateDate?: Date
 }

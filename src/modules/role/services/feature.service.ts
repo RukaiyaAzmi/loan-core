@@ -1,181 +1,107 @@
-import { pgConnect } from "../../../db/factory/connection.db";
-import { FeatureAttrs } from "../interfaces/feature.interface";
 
-export const createFeature = async (f: FeatureAttrs) => {
-  const { rows: feature } = await (
-    await pgConnect.getConnection("master")
-  ).query(
-    `
-      INSERT INTO role_schema.feature ( 
-        feature_name,
-        feature_name_ban,
-        feature_code,
-        url,
-        type,
-        position,
-        icon_id,
-        parent_id,
-        is_active,
-        created_by,
-        updated_by) 
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *;
-    `,
-    [
-      f.featureName,
-      f.featureNameBan,
-      f.featureCode,
-      f.url,
-      f.type,
-      f.position,
-      f.iconId,
-      f.parentId,
-      f.isActive,
-      f.createdBy,
-      f.updatedBy,
-    ]
-  );
+import { Service } from "typedi";
+import { toSnakeCase } from 'keys-transform'
+import { IFeatureAttrs } from "../interfaces/feature.interface";
+import db from '../../../db/connection.db';
+import { getPaginationDetails } from "../../../utils/pagination.util";
+import { IPaginationResponse } from "../../../types/interfaces/pagination.interface";
+import BadRequestError from "../../../errors/bad-request.error";
+import { 
+    buildInsertSql, 
+    buildUpdateSql, 
+    buildWhereAggrSql, 
+    buildWhereSql 
+} from "../../../utils/sql-builder.util";
 
-  return feature[0];
-};
+@Service()
+export default class FeatureService {
+    constructor(
+    ) { }
+    // create a feature
+    async create(data: IFeatureAttrs): Promise<IFeatureAttrs> {
+        const { sql, params } = buildInsertSql('role.feature', { ...data });
+        const pool = db.getConnection("master");
+        const result = await pool.query(sql, params);
+        return result.rows[0]
+    }
 
-export const checkExistingFeature = async (name: string, code: string) => {
-  const { rows: feature } = await (
-    await pgConnect.getConnection("master")
-  ).query(
-    `
-        SELECT COUNT(id) 
-        FROM role_schema.feature 
-        WHERE feature_name = $1 
-        OR feature_code = $2;
-      `,
-    [name, code]
-  );
+    // get feature with pagination
+    async get(page: number, limit: number, filter: IFeatureAttrs): Promise<IPaginationResponse> {
+        const pool = db.getConnection("slave");
+        const filterKeys = Object.keys(filter);
+        if (filterKeys.length > 0) {
 
-  return parseInt(feature[0].count) >= 1 ? true : false;
-};
+            //build where condition dynamically to get updated count value after filtering
+            const { sql: countSql, params: countParams } = buildWhereAggrSql(
+                "SELECT COUNT(*) AS total FROM role.feature",
+                filter,
+                this.injectionFilter
+            )
 
-export const checkExistingFeatureById = async (id: number) => {
-  const { rows: feature } = await (
-    await pgConnect.getConnection("master")
-  ).query(
-    `
-      SELECT COUNT(id) 
-      FROM role_schema.feature
-      WHERE id = $1
-    `,
-    [id]
-  );
+            const totalCount = await (await pool.query(countSql, countParams)).rows[0].total;
+            const pagination = getPaginationDetails(page, totalCount, limit);
+            if (pagination === undefined) throw new BadRequestError("Page out of limit");
 
-  return parseInt(feature[0].count) >= 1 ? true : false;
-};
-export async function deleteFeature(id: number) {
-  console.log(id);
-  await (
-    await pgConnect.getConnection("master")
-  ).query(
-    "Delete FROM role_schema.feature where id= $1",
-    [id]
-  );
+            //build where condition dynamically to get data after filtering
+            const { sql, params } = buildWhereSql(
+                "SELECT * FROM role.feature",
+                filter,
+                pagination.skip,
+                pagination.limit,
+                this.injectionFilter
+            )
+            const result = await pool.query(sql, params);
+            return {
+                limit: limit,
+                currentPage: page,
+                totalPages: pagination.total ?? 0,
+                count: totalCount,
+                data: result.rows
+            }
+        }
+        else {
+            const countRes = await pool.query("SELECT COUNT(*) AS total FROM role.feature");
+            const totalCount: number = countRes.rows[0].total;
+            const pagination = getPaginationDetails(page, totalCount, limit);
+
+            if (pagination === undefined) throw new BadRequestError("Page out of limit");
+            const sql = `
+                SELECT * FROM role.feature 
+                LIMIT $1 
+                OFFSET $2
+            `;
+            const result = await pool.query(sql, [pagination.limit, pagination.skip]);
+            return {
+                limit: limit,
+                currentPage: page,
+                totalPages: pagination.total ?? 0,
+                count: totalCount,
+                data: result.rows
+            }
+
+        }
+    }
+
+    // update feature by id
+    async update(id: number, data: IFeatureAttrs): Promise<IFeatureAttrs> {
+        const { sql, params } = buildUpdateSql('role.feature', id, { ...data });
+        const pool = db.getConnection("master");
+        const result = await pool.query(sql, params);
+        return result.rows[0]
+    }
+
+    // delete feature by id
+    async delete(id: number): Promise<IFeatureAttrs> {
+        const sql = `DELETE FROM role.feature WHERE id = $1 RETURNING *`;
+        const pool = db.getConnection("master");
+        const result = await pool.query(sql, [id]);
+        return result.rows[0]
+    }
+
+    // keys injection filter
+    injectionFilter(key: string): string {
+        return toSnakeCase(key);
+    }
+
+
 }
-
-export async function totalFeatures() {
-  const result = (await pgConnect.getConnection("slave")).query(
-    "select count(feature_name) as total from role_schema.feature"
-  );
-  return Number((await result).rows[0].total);
-}
-
-export async function getfeaturesPagination(page: number, limit: number) {
-  const features = (await pgConnect.getConnection("slave")).query(
-    "SELECT * FROM role_schema.feature LIMIT $2 OFFSET (($1 - 1) * $2)",
-    [page, limit]
-  );
-  return (await features).rows;
-}
-
-//feature service part by Nazmul haque
-//
-//
-
-export async function IdCheck(id: string) {
-  const count_parentID = await (
-    await pgConnect.getConnection("master")
-  ).query("select count(id) from role_schema.feature where id =$1", [id]);
-  return count_parentID.rows[0].count;
-}
-
-export async function ParentKeyCheck(parent_id: string) {
-  console.log(parent_id);
-  const count_parentID = await (
-    await pgConnect.getConnection("master")
-  ).query("select count(id) from role_schema.feature where id =$1", [
-    parent_id,
-  ]);
-  console.log(`parent check service ${count_parentID.rows[0].count}`);
-  return count_parentID.rows[0].count;
-}
-
-export async function uniqueCheckUpdate(
-  feature_name: string,
-  feature_code: string,
-  feature_id: number
-) {
-  const feature_name_count = await (
-    await pgConnect.getConnection("master")
-  ).query(
-    "select count(feature_name) from role_schema.feature where feature_name= $1 and id !=$2",
-    [feature_name, feature_id]
-  );
-  const feature_name_code = await (
-    await pgConnect.getConnection("master")
-  ).query(
-    "select count(feature_code) from role_schema.feature where feature_code= $1 and id !=$2",
-    [feature_code, feature_id]
-  );
-  console.log(feature_name_count.rows[0].count);
-  return [feature_name_count.rows[0].count, feature_name_code.rows[0].count];
-}
-
-export async function updateFeature(
-  id: number,
-  feature_name: string,
-  feature_name_ban: string,
-  feature_code: string,
-  url: string,
-  type: string,
-  position: string,
-  icon_id: number,
-  parent_id: number,
-  is_active: string,
-  created_by: string,
-  updated_by: string
-) {
-  console.log("i am in service update function");
-  // const querytext_find_id= "select id from role_schema.feature where feature_name=$1"
-  // const id= await (await pgConnect.getConnection("master")).query( querytext_find_id,[feature_name]);
-  const querytext_update =
-    "UPDATE role_schema.feature SET feature_name=$1, feature_name_ban=$2, feature_code=$3,url=$4, type=$5, position=$6,icon_id=$7,parent_id=$8,is_active=$9,created_by=$10,updated_by=$11 WHERE id=$12  RETURNING id";
-
-  const updateNotation = await (
-    await pgConnect.getConnection("master")
-  ).query(querytext_update, [
-    feature_name,
-    feature_name_ban,
-    feature_code,
-    url,
-    type,
-    position,
-    icon_id,
-    parent_id,
-    is_active,
-    created_by,
-    updated_by,
-    id,
-  ]);
-
-  return updateNotation.rows[0].id;
-}
-//
-//
-//
-//

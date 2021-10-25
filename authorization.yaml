@@ -1,0 +1,11 @@
+#
+# Feature mapping for authorization
+#
+features:
+  # 
+  # Role module
+  #
+  - {featureName: ROLE, featureNameBan: ROLE, featureCode: '1.0', url: '/role/', isRoot: true, type: P, position: SIDE, iconId: 1, parentId: null, isActive: true}
+  # Create Role
+  - {featureName: CREATE_ROLE, featureNameBan: CREATE_ROLE, featureCode: '1.1', url: '/role/create', isRoot: false, type: C, position: SIDE, iconId: 1, parentId: ROLE, isActive: true}
+  

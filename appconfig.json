@@ -1,19 +1,35 @@
 {
   "port": 8080,
-  "master": {
-    "user": "postgres",
-    "host": "localhost",
-    "database": "loandb",
-    "password": "1234",
-    "port": 5432
-  },
-  "slaves": [
-    {
+  "database": {
+    "master": {
       "user": "postgres",
       "host": "localhost",
       "database": "loandb",
       "password": "1234",
       "port": 5432
+    },
+    "slave": [
+      {
+        "user": "postgres",
+        "host": "localhost",
+        "database": "loandb",
+        "password": "1234",
+        "port": 5432
+      }
+    ],
+    "log": {
+      "user": "postgres",
+      "host": "localhost",
+      "database": "loandb-log",
+      "password": "1234",
+      "port": 5432
     }
-  ]
+  },
+  "admin": {
+    "username": "admin",
+    "password": "$2a$10$VIdBypR01/i3JyTaOJte2OOGauRkyAxBOeYnLxTCmvJNyqDHZq4ZC"
+  },
+  "jwtSecretDev": "ddfbd8b77445ebb9dd0cdf0fb3940ec1a7f06632649aba8ed01e96dc15e9563a",
+  "jwtSecretApp": "ddfbd8b77445ebb9dd0cdf0fb3940ec1a7f06632649aba8ed01e96dc15e9563b",
+  "jwtSecretTemp": "ddfbd8b77445ebb9dd0cdf0fb3940ec1a7f06632649aba8ed01e96dc15e9563c"
 }

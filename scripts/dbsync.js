@@ -8,11 +8,11 @@ const appConf = JSON.parse(fs1.readFileSync(configPath, 'utf-8'));
 //console.log(appConf)
 
 const pool = new Pool({
-    user: appConf.master.user,
-    host: appConf.master.host,
-    database: appConf.master.database,
-    password: appConf.master.password,
-    port: appConf.master.port
+    user: appConf.database.master.user,
+    host: appConf.database.master.host,
+    database: appConf.database.master.database,
+    password: appConf.database.master.password,
+    port: appConf.database.master.port
 })
 
 async function lsDir(dir) {
@@ -43,5 +43,5 @@ async function lsDir(dir) {
         await pool.query(sql);
     }
     pool.end();
-    console.log('connection end')
+    console.log('[INFO] Database init successful')
 }('../entities'));

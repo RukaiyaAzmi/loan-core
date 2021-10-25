@@ -1,171 +1,146 @@
-import express, { Router, Request, Response, NextFunction } from "express";
-import { BadRequestError } from "../../../errors/bad-request.error";
-import { validateRequest } from "../../../middlewares/validate-request.middle";
-import { validateFeature } from "../validators/feature.validator";
-import { NotFoundError } from "../../../errors/not-found.error";
+import express, { Router, Request, Response, NextFunction } from 'express';
+import Container from 'typedi';
+import { validates } from '../../../middlewares/express-validation.middle';
+import { wrap } from '../../../middlewares/wraps.middle';
+import { IFeatureAttrs } from '../interfaces/feature.interface';
+import devAuth from '../middlewares/dev-auth.middle';
+import FeatureService from '../services/feature.service';
 import {
-  checkExistingFeature,
-  checkExistingFeatureById,
-  createFeature,
-  deleteFeature,
-  totalFeatures,
-  getfeaturesPagination,
-  updateFeature,
-} from "../services/feature.service";
-import { FeatureAttrs } from "../interfaces/feature.interface";
-import { pageCheck } from "../middlewares/pageCheck.middle";
-import { IdCheckValidation } from "../middlewares/idcheck.middle";
-import { UniqueCheckValidationUpdate } from "../middlewares/uniqueCheck.middle";
-import { ParentIdCheckValidation } from "../middlewares/ParentIdCheck.middle";
-import { Paginate } from "../../../utils/pagination.utils";
+    createFeature,
+    deleteFeatrue,
+    getFeatureWithFilter,
+    updateFeature
+} from '../validators/feature.validator';
+import lo from 'lodash';
+import BadRequestError from '../../../errors/bad-request.error';
+import { authConf } from '../../../configs/auth.config';
+import { IPaginationResponse } from '../../../types/interfaces/pagination.interface';
+
+
 
 const router: Router = express.Router();
 
-/**
- * Feature Table is Responsible for Application Feature Registration and Management
- * PARENT ID: 1
- */
 
 /**
  * Create Feature
- * CHILD ID: 1.1
  */
-router.post(
-  "/",
-  validateFeature,
-  validateRequest,
-  async (
-    req: Request<unknown, unknown, FeatureAttrs>,
-    res: Response,
-    next: NextFunction
-  ) => {
-    // implementation
-    const { featureName, featureCode, parentId } = req.body;
+router.post('/',
+    [devAuth, validates(createFeature)],
+    wrap(async (req: Request, res: Response, next: NextFunction) => {
+        const featureService: FeatureService = Container.get(FeatureService);
+        const result: IFeatureAttrs | undefined = await featureService.create({
+            ...req.body,
+            createdBy: req.user.username
+        });
 
-    if (await checkExistingFeature(featureName, featureCode)) {
-      throw new BadRequestError("Feature exists");
-    }
-
-    if (parentId && !(await checkExistingFeatureById(Number(parentId)))) {
-      throw new NotFoundError("parentId not found");
-    }
-
-    //change later
-    const createdBy = "admin";
-    const updatedBy = "admin";
-
-    const feature = await createFeature({
-      ...req.body,
-      createdBy,
-      updatedBy,
-    });
-
-    res
-      .status(201)
-      .send({ message: "Feature created successfully", id: feature.id });
-  }
-);
+        res.status(201).json({
+            message: "Request Successful",
+            data: {
+                id: result?.id ?? null
+            }
+        });
+    })
+)
 
 /**
- * Updtae Feature
- * CHILD ID: 1.2
+ * Get Feature with filter
  */
-router.put(
-  "/:id",
-  IdCheckValidation,
-  validateFeature,
-  UniqueCheckValidationUpdate,
-  ParentIdCheckValidation,
-  async (req: Request, res: Response, next: NextFunction) => {
-    // implementation
-    const {
-      feature_name,
-      feature_name_ban,
-      feature_code,
-      url,
-      type,
-      position,
-      icon_id,
-      parent_id,
-      is_active,
-      created_by,
-      updated_by,
-    } = req.body;
+router.get('/',
+    [devAuth, validates(getFeatureWithFilter)],
+    wrap(async (req: Request, res: Response, next: NextFunction) => {
+        const featureService: FeatureService = Container.get(FeatureService);
+        const filter = lo.omit(req.query, ['page', 'limit']);
+        const result = await featureService.get(
+            req.query.page as any,
+            req.query.limit as any,
+            filter
+        )
+        return res.status(200).json({
+            message: "Request Successful",
+            data: result
+        })
+    })
+)
 
-    const id: number = parseInt(req.params.id); // we can use +req.params.id
-    const update = await updateFeature(
-      id,
-      feature_name,
-      feature_name_ban,
-      feature_code,
-      url,
-      type,
-      position,
-      icon_id,
-      parent_id,
-      is_active,
-      created_by,
-      updated_by
-    );
-    return res.status(200).json({
-      message: "User Updated Successfully",
-      id: update,
-    });
-  }
-);
-/**
- * Create Feature
- * CHILD ID: 1.3
- */
-router.delete(
-  "/:id",
-  async (req: Request, res: Response, next: NextFunction) => {
-    // implementation
-    const { id } = req.params;
-    if (!(await checkExistingFeatureById(Number(id)))) {
-      const err = new NotFoundError("Feature not found");
-      return res.status(400).json({
-        message: err.message,
-      });
-    }
-    try {
-      const feature = await deleteFeature(Number(id));
-      return res.status(200).json({
-        message: "Feature Deleted Successfully",
-        id: id,
-      });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).json({
-        message: "Can not delete"
-      })
-    }
-  }
-);
 
 /**
- * Create Feature
- * CHILD ID: 1.4
+ * Update feature attributes by id
  */
-router.get(
-  "/",
-  pageCheck,
-  async (req: Request, res: Response, next: NextFunction) => {
-    const page: number = Number(req.query.page || "1");
-    const limit: number = Number(req.query.limit || "3");
-    const count = await totalFeatures();
-    //console.log("Total: " + count);
-    const featureList = await getfeaturesPagination(page, limit);
-    const pagination = new Paginate(count, limit, page);
-    return res.status(200).json({
-      message: "Request Successfull",
-      ...pagination,
-      data: featureList,
-    });
-  }
-);
+router.put('/:id',
+    [devAuth, validates(updateFeature)],
+    wrap(async (req: Request, res: Response, next: NextFunction) => {
+        const featureService: FeatureService = Container.get(FeatureService);
+        if (lo.size(req.body) > 0) {
+            const result: IFeatureAttrs = await featureService.update(
+                parseInt(req.params.id),
+                { ...req.body, updatedBy: req.user.username, updateDate: new Date() }
+            )
+            return res.status(200).json({
+                message: "Request Successful",
+                data: {
+                    id: result.id ?? null
+                }
+            })
+        }
+        next(new BadRequestError("No update field provided"))
+    })
+)
+
+
+/**
+ * Delete feature by id
+ */
+router.delete('/:id',
+    [devAuth, validates(deleteFeatrue)],
+    wrap(async (req: Request, res: Response, next: NextFunction) => {
+        const featureService: FeatureService = Container.get(FeatureService);
+        const result: IFeatureAttrs = await featureService.delete(parseInt(req.params.id));
+        return res.status(200).json({
+            message: "Request Successful",
+            data: result.id ?? null
+        })
+    })
+)
+
+/**
+ * Init features
+ */
+router.post('/init',
+    [devAuth],
+    wrap(async (req: Request, res: Response, next: NextFunction) => {
+        const features: IFeatureAttrs[] = authConf.features;
+        const featureService: FeatureService = Container.get(FeatureService);
+        for (let f of features) {
+            // inserting the roots
+            if (f.parentId === null) {
+                const result: IFeatureAttrs | undefined = await featureService.create({
+                    ...f,
+                    createdBy: req.user.username
+                });
+            }
+            // inserting the childrens
+            else {
+                const parentRes: IPaginationResponse = await featureService.get(1, 1,
+                    { featureName: f.parentId?.toString() }
+                );
+                const parent: IFeatureAttrs = parentRes.data[0];
+                const result: IFeatureAttrs | undefined = await featureService.create({
+                    ...f,
+                    parentId: parent.id,
+                    createdBy: req.user.username
+                });
+
+            }
+        }
+
+        return res.status(200).json({
+            message: "Request Successful",
+            data: null
+        })
+
+    })
+)
+
+
 
 export default router;
-// function UpdateValidateFeature(arg0: string, IdCheckValidation: (req: express.Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>, res: express.Response<any, Record<string, any>>, next: express.NextFunction) => Promise<...>, UpdateValidateFeature: any, UniqueCheckValidationUpdate: any, ParentIdCheckValidation: any, arg5: (req: Request, res: Response, next: NextFunction) => Promise<express.Response<any, Record<string, any>>>) {
-//   throw new Error("Function not implemented.");
-// }
